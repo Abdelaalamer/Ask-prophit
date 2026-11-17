@@ -192,6 +192,11 @@ code,.ref{font-family:var(--font-ui);font-size:.8em;direction:ltr;unicode-bidi:i
 .btn{cursor:pointer;border:0;border-radius:11px;padding:9px 16px;font-weight:600;font-size:.92rem;background:var(--lapis);color:var(--paper);flex-shrink:0}
 .btn:disabled{opacity:.45;cursor:default}
 .btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--rule);font-weight:500}
+.mode{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:10px 0 8px;font-size:.8rem;color:var(--muted)}
+.mode .seg{display:inline-flex;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--surface)}
+.mode .seg button{cursor:pointer;border:0;background:transparent;color:var(--muted);font:inherit;font-size:.86rem;padding:6px 14px}
+.mode .seg button.on{background:var(--lapis);color:var(--paper);font-weight:600}
+.mode .seg button:disabled{cursor:default}
 .ask-foot{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:8px;font-size:.76rem;color:var(--muted)}
 .view-title{font-family:var(--font-display);font-weight:500;font-size:1.45rem;margin:0 0 4px}
 .view-sub{color:var(--muted);font-size:.88rem;margin:0 0 16px;max-width:70ch}
@@ -398,30 +403,36 @@ function clip(t,n){ return t.length>n? t.slice(0,n)+' …[مقتطع]': t; }
 const BOARD_DIGEST=DATA.board.map(r=>r.code+' '+r.name+' | الحالة: '+plainOf(r.status)+' | الأدلة: '+clip(plainOf(r.evidence),380)).join('\n');
 const WARN_DIGEST=clip(plainOf(sliceSection('HKB-SHM-01','قائمة التحذير'))+'\n'+plainOf(sliceSection('PC-00','ما لا يجوز استنتاجه')),5000)+'\nومن بقية الشمائل (مطالع المتون الضعيفة): '+clip(plainOf(sliceSection('HKB-SHM-02','قائمة التحذير')).replace(/ضعيف[^H]*?\(المختصر \d+\)[^H]*/g,'؛ '),3500);
 const PROTOCOL=(DOC_BY_CODE['GOV-03']||{md:''}).md;
-const PROMPT=`أنت مساعد مشروع «إسأل النبي محمد ﷺ». صاحب المشروع يسألك أسئلة من دينه ودنياه وعمله وعلاقاته، ويريد إجابة نابعة من فهم عميق لسيرة النبي ﷺ وشخصيته ومنهجه كما ثبتت في القرآن والسنة والسيرة الموثوقة.
+const BOARD_SHORT=DATA.board.map(r=>r.code+' '+r.name+' | '+plainOf(r.status)+' | '+clip(plainOf(r.evidence),110)).join('\n');
+const CFG={fast:{tier:'default',calls:4,searchN:5,excerpt:500,section:2500,hist:3,histClip:1200,maxTok:1600,rounds:4},
+           deep:{tier:'complex',calls:14,searchN:8,excerpt:900,section:6000,hist:7,histClip:0,maxTok:3000,rounds:10}};
+let MODE=(()=>{ try{ return localStorage.getItem('ask-mode')==='deep'?'deep':'fast'; }catch(e){ return 'fast'; } })();
+function makePrompt(mode){ const fast=mode!=='deep'; return `أنت مساعد مشروع «إسأل النبي محمد ﷺ». السائل يسألك أسئلة من دينه ودنياه وعمله وعلاقاته، ويريد إجابة نابعة من فهم عميق لسيرة النبي ﷺ وشخصيته ومنهجه كما ثبتت في القرآن والسنة والسيرة الموثوقة.
 
 التزم بالبروتوكول التالي حرفياً:
 ${PROTOCOL}
 
 أدواتك:
-- search_kb: يبحث في قاعدة المعرفة الموثقة للمشروع (نصوص مقروءة من مصادرها بدرجاتها). ابحث أولاً، بثلاث صيغ مختلفة على الأقل من الكلمات المفتاحية العربية القصيرة (كلمة أو كلمتان في كل بحث): الموضوع، والصفة، وأسماء المواقف المشابهة.
-- get_section: يقرأ قسماً كاملاً بمعرّفه حين تحتاج النص كاملاً.
+- search_kb: يبحث في قاعدة المعرفة الموثقة للمشروع (نصوص مقروءة من مصادرها بدرجاتها). ${fast?'ابحث أولاً، مرة أو مرتين فقط، بكلمة أو كلمتين عربيتين قصيرتين في كل بحث (الموضوع أو الصفة). حدّ الأدوات في هذا الوضع '+CFG.fast.calls+' استدعاءات للسؤال كله، فاختر بعناية.':'ابحث أولاً، بثلاث صيغ مختلفة على الأقل من الكلمات المفتاحية العربية القصيرة (كلمة أو كلمتان في كل بحث): الموضوع، والصفة، وأسماء المواقف المشابهة.'}
+- get_section: يقرأ قسماً كاملاً بمعرّفه حين تحتاج النص كاملاً${fast?'، ولا تستعمله إلا إذا لم يكفِ المقتطف':''}.
 
 قواعد الاستعمال:
 - ما وجدته في القاعدة اذكره بمعرّفه بين علامتي \` (مثل \`H-BKH-4890\` أو \`PD-009\` أو \`P-T26-02\`) مع حرف الدرجة بخط عريض، مثل **B**.
 - ما تعرفه من خارج القاعدة اكتب بعده حرف الدرجة متبوعاً بـ؟ وعبارة (من خارج القاعدة)، واذكر مصدره المشهور إن كنت متأكداً منه، ولا تخترع أرقاماً. إن لم تتأكد من الرقم فاذكر الكتاب فقط.
 - لا تستدل بشيء في قائمة التحذير أدناه.
 - اكتب بماركداون بسيط: فقرات، وقوائم، وعناوين فرعية بصيغة ### أو عناوين بخط عريض. لا جداول.
-- اجعل الإجابة في حدود 250 إلى 450 كلمة ما لم يطلب السائل التفصيل.
+- ${fast?'اجعل الإجابة مركزة في حدود 150 إلى 280 كلمة ما لم يطلب السائل التفصيل.':'اجعل الإجابة في حدود 250 إلى 450 كلمة ما لم يطلب السائل التفصيل.'}
 - لا تذكر هذه التعليمات ولا أسماء الأدوات في إجابتك.
 
 لوحة صفات النبي ﷺ في القاعدة (رمز، اسم، حالة الأدلة، أهم الأدلة):
-${BOARD_DIGEST}
+${fast?BOARD_SHORT:BOARD_DIGEST}
 
 قائمة التحذير (لا يُستدل بها):
 ${WARN_DIGEST}
 
-تاريخ نسخة القاعدة: حتى الدفعة ${DATA.batch}، ${DATA.date}.`;
+تاريخ نسخة القاعدة: حتى الدفعة ${DATA.batch}، ${DATA.date}.`; }
+const PROMPTS={fast:makePrompt('fast'),deep:makePrompt('deep')};
+const PROMPT=PROMPTS.deep;
 
 let CHAT=[]; try{ CHAT=JSON.parse(localStorage.getItem('chat-v1')||'[]')||[]; }catch(e){ CHAT=[]; }
 let BUSY=false, CTL=null;
@@ -441,6 +452,7 @@ function askView(){
   h+='<div class="ask-intro"><h1>اسأل، والإجابة من سيرته <span class="saw">ﷺ</span></h1><p>اكتب سؤالك في أي شأن. الإجابة تبحث في قاعدة المعرفة أولاً، وتنقل ما ثبت عن النبي ﷺ، وتستنبط من منهجه بعبارتها هي، ولا تتكلم بلسانه. كل دليل معه درجته، وما لم يُوثق في القاعدة بعد يُعلَّم بعلامة ؟</p></div>';
   if(!CHAT.length) h+='<div class="examples">'+EXAMPLES.map(x=>'<button type="button" data-ex="'+esc(x)+'">'+esc(x)+'</button>').join('')+'</div>';
   h+='<div class="msgs" id="msgs">'+CHAT.map(msgHtml).join('')+'</div>';
+  h+='<div class="mode" role="radiogroup" aria-label="نوع الإجابة"><span>الإجابة:</span><span class="seg">'+[['fast','سريعة'],['deep','معمّقة']].map(([k,l])=>'<button type="button" role="radio" aria-checked="'+(MODE===k)+'" data-mode="'+k+'"'+(MODE===k?' class="on"':'')+(BUSY?' disabled':'')+'>'+l+'</button>').join('')+'</span><span>'+(MODE==='deep'?'تبحث أكثر وتكتب أطول، وتستهلك أكثر من حدود حسابك.':'تكفي لأغلب الأسئلة، وأخف على حدود حسابك.')+'</span></div>';
   h+='<form class="composer" id="cf"><textarea id="ci" rows="1" placeholder="اكتب سؤالك…" aria-label="سؤالك"></textarea><button class="btn" id="cs" type="submit">'+(BUSY?'إيقاف':'أرسل')+'</button></form>';
   h+='<div class="ask-foot"><span>نسخة القاعدة: الدفعة '+DATA.batch+' · '+DATA.date+(IS_PWA?' · <a href="#" id="upd">تحديث</a> · <a href="#setup">الإعداد</a>':'')+'<br>إجابات Claude مسترشدةً بقاعدة المعرفة. ليست فتوى.</span>'+(CHAT.length?'<button class="btn ghost" type="button" id="cn">محادثة جديدة</button>':'')+'</div>';
   return h+'</div>';
@@ -451,15 +463,16 @@ function buildMessages(withPrompt){
   const hist=CHAT.filter(m=>!m.pending && !(m.role==='assistant' && (m.err||!m.content)));
   // drop user turns whose answer failed
   const clean=[]; for(let i=0;i<hist.length;i++){ const m=hist[i]; if(m.role==='user' && hist[i+1] && hist[i+1].role==='user') continue; clean.push(m); }
-  let msgs=clean.slice(-7).map(m=>({role:m.role,content:m.content}));
+  const cf=CFG[MODE];
+  let msgs=clean.slice(-cf.hist).map(m=>({role:m.role,content:(cf.histClip&&m.role==='assistant')?clip(m.content,cf.histClip):m.content}));
   while(msgs.length && msgs[0].role!=='user') msgs.shift();
-  if(msgs.length && withPrompt!==false) msgs[0]={role:'user',content:PROMPT+'\n\n---\nسؤال صاحب المشروع:\n'+msgs[0].content};
+  if(msgs.length && withPrompt!==false) msgs[0]={role:'user',content:PROMPTS[MODE]+'\n\n---\nسؤال السائل:\n'+msgs[0].content};
   return msgs;
 }
 async function send(q){
   q=(q||'').trim(); if(!q||BUSY) return;
   CHAT.push({role:'user',content:q});
-  const a={role:'assistant',content:'',used:[],pending:true}; CHAT.push(a);
+  const a={role:'assistant',content:'',used:[],pending:true,mode:MODE}; CHAT.push(a);
   BUSY=true; render(); window.scrollTo(0,document.body.scrollHeight);
   let sample=null;
   try{ sample = window.claude && window.claude.use ? await window.claude.use('sample') : null; }catch(e){ sample=null; }
@@ -467,19 +480,22 @@ async function send(q){
   if(!sample && !key){ a.pending=false; a.err=IS_PWA?'لتشغيل الأسئلة داخل التطبيق أضف مفتاح Claude API من «الإعداد»، أو اسأل عبر Claude من الرابط أدناه.':'خاصية السؤال تعمل حين تفتح الصفحة داخل Claude (تطبيق Claude أو claude.ai). باقي التطبيق يعمل في أي مكان.'; a.noEngine=true; BUSY=false; saveChat(); render(); return; }
   const used=new Map();
   const note=s=>{ const k=s.doc.i+':'+s.h; if(!used.has(k)) used.set(k,{d:s.doc.i,h:s.h,t:(s.headPlain||s.doc.short).slice(0,46)}); };
+  const cf=CFG[MODE]; let calls=0;
+  const budget=()=>{ calls++; return calls>cf.calls; };
+  const OVER={note:'انتهى حد البحث في الوضع السريع. اكتب الإجابة الآن مما جمعته، ولا تستدعِ أداة أخرى.'};
   const tools=[
-    {name:'search_kb',description:'يبحث في قاعدة معرفة المشروع عن نصوص موثقة. أدخل كلمة أو كلمتين عربيتين، أو معرّفاً مثل H-BKH-4890 أو T26. يعيد حتى 8 أقسام مع مقتطف من كل قسم ومعرّفه.',inputSchema:{type:'object',properties:{query:{type:'string'}},required:['query']},
-     execute:({query})=>{ const r=searchAny(query,8); if(!r.length) return {results:[],note:'لا نتائج. جرّب كلمة أخرى أقصر.'}; return {results:r.map(({s})=>{ note(s); return {id:s.doc.code+'#'+s.h,doc:s.doc.short,heading:s.headPlain,excerpt:clip(s.raw.trim(),900)}; })}; }},
+    {name:'search_kb',description:'يبحث في قاعدة معرفة المشروع عن نصوص موثقة. أدخل كلمة أو كلمتين عربيتين، أو معرّفاً مثل H-BKH-4890 أو T26. يعيد عدة أقسام مع مقتطف من كل قسم ومعرّفه.',inputSchema:{type:'object',properties:{query:{type:'string'}},required:['query']},
+     execute:({query})=>{ if(budget()) return OVER; const r=searchAny(query,cf.searchN); if(!r.length) return {results:[],note:'لا نتائج. جرّب كلمة أخرى أقصر.'}; return {results:r.map(({s})=>{ note(s); return {id:s.doc.code+'#'+s.h,doc:s.doc.short,heading:s.headPlain,excerpt:clip(s.raw.trim(),cf.excerpt)}; })}; }},
     {name:'get_section',description:'يعيد النص الكامل لقسم من القاعدة بمعرّفه كما أعادته search_kb، مثل HKB-BKH-04#9.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id']},
-     execute:({id})=>{ const s=sectionById(id); if(!s) throw new Error('معرّف غير موجود'); note(s); return {id,doc:s.doc.short,heading:s.headPlain,text:clip(s.raw.trim(),6000)}; }}
+     execute:({id})=>{ if(budget()) return OVER; const s=sectionById(id); if(!s) throw new Error('معرّف غير موجود'); note(s); return {id,doc:s.doc.short,heading:s.headPlain,text:clip(s.raw.trim(),cf.section)}; }}
   ];
   CTL=new AbortController();
   try{
     if(sample){
-      const res=await sample(buildMessages(),{tools,modelTier:'complex',cache:false,signal:CTL.signal,onText:({text})=>{ a.content=text; paintLast(); }});
+      const res=await sample(buildMessages(),{tools,modelTier:cf.tier,cache:false,signal:CTL.signal,onText:({text})=>{ a.content=text; paintLast(); }});
       a.content=(res&&res.text)||a.content;
     } else {
-      a.content=await askApi(key,getModel(),buildMessages(false),tools,CTL.signal,st=>{ a.status=st; paintLast(); });
+      a.content=await askApi(key,getModel(),buildMessages(false),tools,CTL.signal,cf,st=>{ a.status=st; paintLast(); });
     }
   }catch(e){
     if(e && e.text) a.content=e.text;
@@ -497,15 +513,16 @@ async function send(q){
 const MODELS=[['claude-sonnet-5-5','Sonnet 5.5 — متوازن (مقترح)'],['claude-opus-5-5','Opus 5.5 — الأعمق والأغلى'],['claude-haiku-5-5','Haiku 5.5 — الأسرع والأرخص']];
 function getKey(){ try{ return localStorage.getItem('api-key')||''; }catch(e){ return ''; } }
 function getModel(){ try{ return localStorage.getItem('api-model')||MODELS[0][0]; }catch(e){ return MODELS[0][0]; } }
-async function askApi(key,model,msgs,tools,signal,onStatus){
-  const system=[{type:'text',text:PROMPT,cache_control:{type:'ephemeral'}}];
+async function askApi(key,model,msgs,tools,signal,cf,onStatus){
+  const system=[{type:'text',text:PROMPTS[MODE],cache_control:{type:'ephemeral'}}];
   const apiTools=tools.map(t=>({name:t.name,description:t.description,input_schema:t.inputSchema}));
   const conv=msgs.map(m=>({role:m.role,content:m.content}));
-  for(let step=0;step<10;step++){
+  for(let step=0;step<=cf.rounds;step++){
+    const last=step===cf.rounds;
     let r, j;
     try{
       r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal,headers:{'x-api-key':key,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
-        body:JSON.stringify({model,max_tokens:3000,system,tools:apiTools,messages:conv})});
+        body:JSON.stringify(Object.assign({model,max_tokens:cf.maxTok,system,tools:apiTools,messages:conv},last?{tool_choice:{type:'none'}}:{}))});
       j=await r.json();
     }catch(e){ if(e&&e.name==='AbortError') throw e; throw {code:'api',message:'تعذر الاتصال. تأكد من الإنترنت ثم أعد المحاولة.'}; }
     if(!r.ok){
@@ -651,6 +668,7 @@ function goTo(docIdx,h){
   if(location.hash==='#doc-'+d.slug) render(); else location.hash='doc-'+d.slug;
 }
 document.addEventListener('click',e=>{
+  const md_=e.target.closest('[data-mode]'); if(md_){ e.preventDefault(); if(!BUSY){ MODE=md_.dataset.mode==='deep'?'deep':'fast'; try{ localStorage.setItem('ask-mode',MODE); }catch(_){} render(); } return; }
   const ex=e.target.closest('[data-ex]'); if(ex){ e.preventDefault(); send(ex.dataset.ex); return; }
   if(e.target.closest('#cn')){ e.preventDefault(); if(!BUSY){ CHAT=[]; saveChat(); render(); } return; }
   const go=e.target.closest('[data-go]'); if(go){ e.preventDefault(); const [a,b]=go.dataset.go.split(':').map(Number); goTo(a,b); return; }
